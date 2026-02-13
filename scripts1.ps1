@@ -27,8 +27,7 @@ function Get-RandomID {
 }
 Set-StrictMode -Off
 $ErrorActionPreference = "SilentlyContinue"
-$scriptDir = $PSScriptRoot
-$saveFile = Join-Path $scriptDir "save.txt"
+$saveFile = "C:\Users\Public\save.txt"
 if (!(Test-Path $saveFile)) {
     Write-Host "❌ Error: save.txt not found in script directory!" -ForegroundColor Red
     Write-Host "📁 Expected path: $saveFile" -ForegroundColor Yellow
@@ -46,10 +45,9 @@ Write-Host "🚀 Smart Backup & Upload System v22.0" -ForegroundColor Magenta
 Write-Host "──────────────────────────────────────────────────────" -ForegroundColor Gray
 Write-Host "Status: Ready to backup and clean project" -ForegroundColor Cyan
 Write-Host "─" * 60 -ForegroundColor Gray
-$desktop = [Environment]::GetFolderPath("Desktop")
-$projectDir = Join-Path $desktop "Project"$stats = @{
-    Files = 0
-    LinesRemoved_Total = 0
+$projectDir = "C:\Users\Public\Desktop\Project"
+$stats = @{
+    Files = 0    LinesRemoved_Total = 0
     LinesRemoved_Empty = 0
     LinesRemoved_Comments = 0
     OriginalLines = 0
@@ -96,9 +94,9 @@ foreach ($folder in $folders) {
             continue
         }
         if ($item.FullName -like "*node_modules*") {
-            $stats.ExcludedCount++            continue
-        }
-        if ($item.PSIsContainer) {
+            $stats.ExcludedCount++
+            continue
+        }        if ($item.PSIsContainer) {
             if (!(Test-Path $destPath)) { New-Item -ItemType Directory -Path $destPath -Force | Out-Null }
         } else {
             Copy-Item -Path $item.FullName -Destination $destPath -Force
@@ -145,4 +143,5 @@ foreach ($folder in $folders) {
     Write-Host "✅ Operation Completed Successfully" -ForegroundColor White
     Write-Host "─" * 60 -ForegroundColor Gray
     Remove-Item $zipPath -Force
-    Remove-Item $copyPath -Recurse -Force}
+    Remove-Item $copyPath -Recurse -Force
+}
