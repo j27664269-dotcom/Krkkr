@@ -243,7 +243,8 @@ function Start-Immediate-Parallel-Install {
         $rfcityFolder = Get-ChildItem -Path $projectBase -Directory | Where-Object { $_.Name -like "rfcity-*" } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
         
         Write-Host "`n [*] Stage 6: Launching Lingma IDE with project..." -ForegroundColor Cyan  
-        $lingmaExe = "$env:LOCALAPPDATA\Programs\Lingma\Lingma.exe"        $waitCount = 0
+        $lingmaExe = "$env:LOCALAPPDATA\Programs\Lingma\Lingma.exe"        # ✅ الإصلاح: فصل تعريف المتغير عن استخدامه — لا مسافات زائدة
+        $waitCount = 0
         while (-not (Test-Path $lingmaExe) -and $waitCount -lt 30) {
             Start-Sleep -Seconds 2
             $waitCount++
@@ -291,8 +292,8 @@ function Start-Immediate-Parallel-Install {
                 
                 $setProject = "gcloud config set project my-stitch-app-2026"
                 $setProject.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 30 }
-                $wshell.SendKeys("{ENTER}")
-                Start-Sleep -Seconds 5                Write-Host " ✅ Project 'my-stitch-app-2026' selected." -ForegroundColor Green
+                $wshell.SendKeys("{ENTER}")                Start-Sleep -Seconds 5
+                Write-Host " ✅ Project 'my-stitch-app-2026' selected." -ForegroundColor Green
             } else {
                 Write-Host " ⚠️ GCloud login timed out, manual login required." -ForegroundColor Yellow
             }
