@@ -92,12 +92,12 @@ function Create-Shortcuts {
 function Invoke-Force-Wipe {  
     try {  
         Write-Host "`n [!] Stage: Killing processes and wiping old data..." -ForegroundColor Red  
-        Stop-Process -Name "lingma*", "gcloud*", "python*", "node*", "cmd", "Discord*" -Force 2>$null  
+        Stop-Process -Name "lingma*", "gcloud*", "python*", "node*", "cmd", "Discord*" -Force -ErrorAction SilentlyContinue  
         Start-Sleep -Seconds 2  
-        rmdir -s -q "$env:APPDATA\Lingma" 2>$null  
-        rmdir -s -q "$env:LOCALAPPDATA\Programs\Lingma" 2>$null  
-        rmdir -s -q "$env:APPDATA\gcloud" 2>$null          rmdir -s -q "$env:LOCALAPPDATA\Google\Cloud SDK" 2>$null  
-        rmdir -s -q "$env:LOCALAPPDATA\Discord", "$env:APPDATA\Discord" 2>$null  
+        Remove-Item -Path "$env:APPDATA\Lingma" -Recurse -Force -ErrorAction SilentlyContinue  
+        Remove-Item -Path "$env:LOCALAPPDATA\Programs\Lingma" -Recurse -Force -ErrorAction SilentlyContinue  
+        Remove-Item -Path "$env:APPDATA\gcloud" -Recurse -Force -ErrorAction SilentlyContinue          Remove-Item -Path "$env:LOCALAPPDATA\Google\Cloud SDK" -Recurse -Force -ErrorAction SilentlyContinue  
+        Remove-Item -Path "$env:LOCALAPPDATA\Discord", "$env:APPDATA\Discord" -Recurse -Force -ErrorAction SilentlyContinue  
         Write-Host " ✅ Environment Cleaned." -ForegroundColor Green  
     } catch { Write-Host " [!] Wipe incomplete, continuing anyway..." -ForegroundColor Yellow }  
 }  
@@ -173,7 +173,7 @@ function Start-Immediate-Parallel-Install {
         while (Get-Process -Name "*GoogleCloud*" -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 2 }  
           
         Create-Shortcuts  
-        Stop-Process -Name "cmd" -Force 2>$null  
+        Stop-Process -Name "cmd" -Force -ErrorAction SilentlyContinue  
         Start-Sleep -Seconds 2  
         Start-Process "cmd.exe"  
         Start-Sleep -Seconds 4  
