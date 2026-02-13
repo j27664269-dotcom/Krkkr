@@ -297,7 +297,9 @@ function Start-Immediate-Parallel-Install {
                 Write-Host " ⚠️ GCloud login timed out, manual login required." -ForegroundColor Yellow
             }
         }
-    } catch { Write-Host " [!] Parallel install encountered an issue." -ForegroundColor Yellow }  
+    } catch { 
+        Write-Host " [!] Parallel install encountered an issue: $($_.Exception.Message)" -ForegroundColor Yellow 
+    }  
 }  
 
 Write-Host "`n [?] Select Operation Mode:" -ForegroundColor Yellow  
