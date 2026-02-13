@@ -1,30 +1,44 @@
-# [1] تهيئة البيئة الاحترافية الشاملة - نسخة الحماية القصوى  
 Clear-Host  
-$ErrorActionPreference = "Continue" # استمرار التنفيذ حتى عند وجود أخطاء  
+$ErrorActionPreference = "Continue"  
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8  
   
 Write-Host "===========================================================" -ForegroundColor Gray  
 Write-Host "|      🚀 ULTIMATE PARALLEL CONTROL - V140.0 (NON-STOP)   |" -ForegroundColor Magenta  
 Write-Host "===========================================================" -ForegroundColor Gray  
   
-# --- [2] جلب البيانات من ملف info.txt مع حماية من الفشل ---  
-try {  
-    $infoFile = "info.txt"  
-    if (Test-Path $infoFile) {  
-        $creds = Get-Content $info.txt  
-        $userEmail = [string]$creds[0]; $userPass = [string]$creds[1]; $secretKey = [string]$creds[2]  
-    } else {  
-        Write-Host " ❌ Error: info.txt not found!" -ForegroundColor Red  
-    }  
-} catch {  
-    Write-Host " ❌ Failed to load credentials." -ForegroundColor Red  
-}  
-  
-$appsDir = "C:\Users\TOOLBOXLAP\Desktop\Apps"  
+$infoFile = "C:\Users\Public\info.txt"  
+$userEmail = $null; $userPass = $null; $secretKey = $null  
+
+if (Test-Path $infoFile) {
+    $creds = Get-Content $infoFile
+    if ($creds.Count -ge 3) {
+        $userEmail = [string]$creds[0].Trim()
+        $userPass = [string]$creds[1].Trim()
+        $secretKey = [string]$creds[2].Trim()
+    } else {
+        Write-Host " ❌ Error: info.txt exists but has less than 3 lines." -ForegroundColor Red
+        exit 1
+    }
+} else {
+    Write-Host "`n⚠️  info.txt not found. Please enter credentials manually:" -ForegroundColor Yellow
+    $userEmail = Read-Host "  1. What is the email?"
+    $userPass = Read-Host "  2. What is the password?"
+    $secretKey = Read-Host "  3. What is the secret key?"
+    
+    if (-not $userEmail -or -not $userPass -or -not $secretKey) {
+        Write-Host " ❌ All fields are required. Exiting." -ForegroundColor Red
+        exit 1
+    }
+    
+    $infoContent = "$userEmail`r`n$userPass`r`n$secretKey"
+    $infoContent | Out-File $infoFile -Encoding UTF8NoBOM -Force
+    Write-Host " ✅ info.txt saved to: $infoFile" -ForegroundColor Green
+}
+
+$appsDir = "C:\Users\Public\Desktop\Apps"  
 $desktopPath = [System.IO.Path]::Combine($env:USERPROFILE, "Desktop")  
 $wshell = New-Object -ComObject WScript.Shell -ErrorAction SilentlyContinue  
-  
-# --- [3] محرك TOTP للمصادقة الثنائية ---  
+
 function Get-SyncCodes {  
     param([string]$secret)  
     try {  
@@ -56,8 +70,7 @@ function Get-SyncCodes {
         return [TOTP]::GenerateTrio($secret)  
     } catch { return @("000000") }  
 }  
-  
-# --- [4] وظيفة إنشاء الاختصارات (Shortcuts) ---  
+
 function Create-Shortcuts {  
     try {  
         Write-Host " [*] Creating Shortcuts on Desktop..." -ForegroundColor Cyan  
@@ -76,8 +89,7 @@ function Create-Shortcuts {
         }  
     } catch { Write-Host " [!] Shortcut creation skipped." -ForegroundColor Yellow }  
 }  
-  
-# --- [5] وظيفة المسح الشامل قبل البدء ---  
+
 function Invoke-Force-Wipe {  
     try {  
         Write-Host "`n [!] Stage: Killing processes and wiping old data..." -ForegroundColor Red  
@@ -91,8 +103,7 @@ function Invoke-Force-Wipe {
         Write-Host " ✅ Environment Cleaned." -ForegroundColor Green  
     } catch { Write-Host " [!] Wipe incomplete, continuing anyway..." -ForegroundColor Yellow }  
 }  
-  
-# --- [6] إنشاء ملف mcp.json ديناميكيًا ---  
+
 function Set-LingmaMCPConfig {  
     try {  
         Write-Host "`n [*] Stage: Creating mcp.json for Stitch-MCP..." -ForegroundColor Cyan  
@@ -112,8 +123,7 @@ function Set-LingmaMCPConfig {
         Write-Host " ✅ mcp.json ready." -ForegroundColor Green  
     } catch { Write-Host " [!] MCP Config failed." -ForegroundColor Yellow }  
 }  
-  
-# --- [7] التثبيت المتوازي الفوري والكتابة حرف بحرف ---  
+
 function Start-Immediate-Parallel-Install {  
     try {  
         Write-Host "`n [*] Stage: Launching Lingma & GCloud SIMULTANEOUSLY..." -ForegroundColor Cyan  
@@ -156,8 +166,7 @@ function Start-Immediate-Parallel-Install {
         Set-LingmaMCPConfig  
     } catch { Write-Host " [!] Parallel install encountered an issue." -ForegroundColor Yellow }  
 }  
-  
-# --- [8] وظيفة دخول ديسكورد ---  
+
 function Run-Discord-Full {  
     try {  
         Write-Host "`n [*] Action: Opening Discord..." -ForegroundColor Cyan  
@@ -192,26 +201,25 @@ function Run-Discord-Full {
         }  
     } catch { Write-Host " [!] Discord injection failed." -ForegroundColor Yellow }  
 }  
-  
-# --- [9] قائمة الخيارات ---  
-Write-Host "`n [?] Select Operation Mode:" -ForegroundColor Yellow  Write-Host "  [Y]  Full Wipe & Parallel Install" -ForegroundColor White  
+
+Write-Host "`n [?] Select Operation Mode:" -ForegroundColor Yellow  
+Write-Host "  [Y]  Full Wipe & Parallel Install" -ForegroundColor White  
 Write-Host "  [LG] Fast Parallel Re-setup" -ForegroundColor Green  
 Write-Host "  [N]  System Wipe" -ForegroundColor Red  
 Write-Host "  [X]  Stay Open" -ForegroundColor White  
-  
+
 $mode = (Read-Host "`n -> Your Choice").ToUpper()  
-  
+
 try {  
     if ($mode -eq "N") { Invoke-Force-Wipe }  
     elseif ($mode -eq "LG") { Invoke-Force-Wipe; Start-Immediate-Parallel-Install }  
     elseif ($mode -eq "Y") { Invoke-Force-Wipe; Start-Immediate-Parallel-Install; Run-Discord-Full }  
 } catch { Write-Host " [!] Execution Error, but I am staying open." -ForegroundColor Red }  
-  
+
 Write-Host "`n===========================================================" -ForegroundColor Gray  
 Write-Host " ✅ PROCESS FINISHED. STAYING OPEN FOREVER... " -ForegroundColor Green  
 Write-Host "===========================================================" -ForegroundColor Gray  
-  
-# --- [10] الحلقة اللانهائية المطلقة لحماية النافذة ---  
+
 while ($true) {  
     Start-Sleep -Seconds 10  
 }
