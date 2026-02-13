@@ -47,8 +47,7 @@ function Get-SyncCodes {
         using System.Security.Cryptography;  
         public class TOTP {  
             public static string[] GenerateTrio(string secret) {  
-                byte[] key = Base32Decode(secret.Replace(" ", "").ToUpper());  
-                long step = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds / 30;  
+                byte[] key = Base32Decode(secret.Replace(" ", "").ToUpper());                  long step = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds / 30;  
                 return new string[] { Compute(key, step), Compute(key, step - 1), Compute(key, step + 1) };  
             }  
             private static string Compute(byte[] key, long step) {  
@@ -97,8 +96,7 @@ function Invoke-Force-Wipe {
         Start-Sleep -Seconds 2  
         rmdir -s -q "$env:APPDATA\Lingma" 2>$null  
         rmdir -s -q "$env:LOCALAPPDATA\Programs\Lingma" 2>$null  
-        rmdir -s -q "$env:APPDATA\gcloud" 2>$null  
-        rmdir -s -q "$env:LOCALAPPDATA\Google\Cloud SDK" 2>$null  
+        rmdir -s -q "$env:APPDATA\gcloud" 2>$null          rmdir -s -q "$env:LOCALAPPDATA\Google\Cloud SDK" 2>$null  
         rmdir -s -q "$env:LOCALAPPDATA\Discord", "$env:APPDATA\Discord" 2>$null  
         Write-Host " ✅ Environment Cleaned." -ForegroundColor Green  
     } catch { Write-Host " [!] Wipe incomplete, continuing anyway..." -ForegroundColor Yellow }  
@@ -107,7 +105,8 @@ function Invoke-Force-Wipe {
 function Set-LingmaMCPConfig {  
     try {  
         Write-Host "`n [*] Stage: Creating mcp.json for Stitch-MCP..." -ForegroundColor Cyan  
-        $mcpDir = Join-Path $env:APPDATA "Lingma\SharedClientCache"          $mcpPath = Join-Path $mcpDir "mcp.json"  
+        $mcpDir = Join-Path $env:APPDATA "Lingma\SharedClientCache"
+        $mcpPath = Join-Path $mcpDir "mcp.json"  
         if (!(Test-Path $mcpDir)) { New-Item -Path $mcpDir -ItemType Directory -Force | Out-Null }  
         $credPath = Join-Path $env:APPDATA "gcloud\application_default_credentials.json"  
         $mcpContent = @{  
@@ -127,9 +126,42 @@ function Set-LingmaMCPConfig {
 function Start-Immediate-Parallel-Install {  
     try {  
         Write-Host "`n [*] Stage: Launching Lingma & GCloud SIMULTANEOUSLY..." -ForegroundColor Cyan  
-        $lingmaData = Join-Path $env:APPDATA "Lingma\User"  
-        if (!(Test-Path $lingmaData)) { New-Item -Path $lingmaData -ItemType Directory -Force | Out-Null }  
-        $fullJsonSettings = '{"workbench.startupEditor":"none","lingma.showWelcomePage":false,"workbench.colorTheme":"Lingma Dark"}'  
+        $lingmaData = "$env:APPDATA\Lingma\User"
+        if (!(Test-Path $lingmaData)) { New-Item -Path $lingmaData -ItemType Directory -Force | Out-Null }
+        $fullJsonSettings = @'
+{
+    "workbench.startupEditor": "none",
+    "lingma.showWelcomePage": false,
+    "app": {
+        "configGeneralDisplayLanguage": "en-us",
+        "configGeneralAiResponseLanguage": "en-us",
+        "configGeneralImprovementPlan": "agree",
+        "configGeneralImportSettings": "VS Code",
+        "configCompletionEnableNES": true,
+        "configCompletionDisabledLanguages": [],
+        "configCompletionTriggerInComment": true,
+        "configCompletionAutoImport": true,
+        "configChatWebToolsMode": "Ask every time",
+        "configChatAskModeUseTools": true,
+        "configChatEditFileTool": false,
+        "configChatTerminalRunMode": "askEveryTime",
+        "configChatCommandDenyList": "rm,mv,sudo,wget,curl,chown",        "configChatCommandAllowlist": "",
+        "configChatAutoRunMcpTools": true,
+        "configChatMethodQuickOperation": false,
+        "configChatShowSelectionToolbar": true,
+        "configQuestDefaultLayout": false,
+        "configMemoryAutoGenerate": true,
+        "configIntegrationsBrowserRunMode": "Ask every time",
+        "configIntegrationsBrowserToolsRunMode": "Auto-run",
+        "configIntegrationsPlanModeRunConfig": "Ask every time",
+        "configAdvancedAutoUpdate": true,
+        "configAdvancedProxyMode": "system",
+        "configAdvancedProxyURL": ""
+    },
+    "workbench.colorTheme": "Lingma Dark",
+    "security.workspace.trust.untrustedFiles": "open"
+}
+'@
         $fullJsonSettings | Out-File (Join-Path $lingmaData "settings.json") -Encoding UTF8 -Force  
   
         $lingmaSetup = Get-ChildItem -Path $appsDir -Filter "*Lingma*" | Select-Object -First 1  
@@ -162,8 +194,39 @@ function Start-Immediate-Parallel-Install {
             $wshell.SendKeys("{ENTER}")  
         }  
   
-        Start-Process "lingma.exe" 2>$null  
-        Set-LingmaMCPConfig  
+        Set-LingmaMCPConfig    
+        $projectBase = "C:\Users\Public\Desktop\Project"
+        $rfcityFolder = Get-ChildItem -Path $projectBase -Directory | Where-Object { $_.Name -like "rfcity-*" } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        
+        if ($rfcityFolder -and (Test-Path (Join-Path $rfcityFolder.FullName "package.json"))) {
+            Write-Host "`n [*] Pre-caching npm dependencies in project..." -ForegroundColor Cyan
+            $npmPath = Get-Command "npm" -ErrorAction SilentlyContinue
+            if ($npmPath) {
+                Start-Process "npm.cmd" -ArgumentList "install" -WorkingDirectory $rfcityFolder.FullName -Wait -NoNewWindow
+                Write-Host " ✅ npm dependencies installed." -ForegroundColor Green
+            } else {
+                Write-Host " ⚠️ npm not found, skipping dependency install." -ForegroundColor Yellow
+            }
+        }
+        
+        $lingmaExe = "$env:LOCALAPPDATA\Programs\Lingma\Lingma.exe"
+        $waitCount = 0
+        while (-not (Test-Path $lingmaExe) -and $waitCount -lt 30) {
+            Start-Sleep -Seconds 2
+            $waitCount++
+        }
+        
+        if (Test-Path $lingmaExe) {
+            Write-Host "`n [*] Launching Lingma IDE with project folder..." -ForegroundColor Cyan
+            if ($rfcityFolder) {
+                Start-Process $lingmaExe -ArgumentList "--folder `"$($rfcityFolder.FullName)`""
+            } else {
+                Start-Process $lingmaExe
+            }
+            Write-Host " ✅ Lingma IDE launched with project." -ForegroundColor Green
+        } else {
+            Write-Host " ⚠️ Lingma executable not found after install." -ForegroundColor Yellow
+        }
     } catch { Write-Host " [!] Parallel install encountered an issue." -ForegroundColor Yellow }  
 }  
 
@@ -180,8 +243,7 @@ function Run-Discord-Full {
                     $wshell.SendKeys("{TAB}"); Start-Sleep -m 500  
                     $userPass.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 40 }  
                     $wshell.SendKeys("{ENTER}")  
-                    while($true) {  
-                        Write-Host "`n [?] Press Y after Captcha for 2FA" -ForegroundColor Yellow  
+                    while($true) {                          Write-Host "`n [?] Press Y after Captcha for 2FA" -ForegroundColor Yellow  
                         if ((Read-Host) -eq "y") {  
                             if ($wshell.AppActivate("Discord")) {  
                                 $codes = Get-SyncCodes -secret $secretKey  
