@@ -123,11 +123,62 @@ function Set-LingmaMCPConfig {
     } catch { Write-Host " [!] MCP Config failed." -ForegroundColor Yellow }  
 }  
 
+function Install-Discord-And-Login {  
+    try {  
+        Write-Host "`n [*] Stage: Installing & Logging into Discord..." -ForegroundColor Cyan  
+        $discordSetup = Get-ChildItem -Path $appsDir -Filter "*Discord*" | Select-Object -First 1
+        if ($discordSetup -and (Test-Path $discordSetup.FullName)) {
+            Write-Host "   Installing Discord..." -ForegroundColor Gray
+            Start-Process $discordSetup.FullName -ArgumentList "/S" -Wait
+        }
+        
+        $updateExe = Join-Path $env:LOCALAPPDATA "Discord\Update.exe"  
+        if (Test-Path $updateExe) {  
+            Start-Process $updateExe -ArgumentList "--processStart Discord.exe"  
+            for ($i = 0; $i -lt 120; $i++) {  
+                if ($wshell -and $wshell.AppActivate("Discord")) {  
+                    Start-Sleep -Seconds 15  
+                    $userEmail.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 40 }  
+                    $wshell.SendKeys("{TAB}"); Start-Sleep -m 500  
+                    $userPass.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 40 }  
+                    $wshell.SendKeys("{ENTER}")  
+                    Start-Sleep -Seconds 8
+                    
+                    Write-Host "`n [?] CAPTCHA: Solve captcha manually, then press Y to proceed with 2FA" -ForegroundColor Yellow -BackgroundColor Black
+                    while ((Read-Host "   Ready for 2FA? (Y/N)").ToUpper() -ne "Y") { Start-Sleep -Seconds 1 }                    
+                    if ($wshell.AppActivate("Discord")) {  
+                        $codes = Get-SyncCodes -secret $secretKey  
+                        Write-Host "   Sending TOTP codes (prev/current/next)..." -ForegroundColor Gray
+                        foreach ($c in $codes) {  
+                            $wshell.SendKeys("^a{BACKSPACE}")  
+                            $c.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 40 }  
+                            $wshell.SendKeys("{ENTER}"); Start-Sleep -Seconds 3  
+                        }  
+                        Start-Sleep -Seconds 5
+                        if ($wshell.AppActivate("Discord")) {
+                            Write-Host " ✅ Discord login successful." -ForegroundColor Green
+                            return $true
+                        }
+                    }  
+                }  
+                Start-Sleep -Seconds 1  
+            }  
+        }  
+        Write-Host " ⚠️ Discord login incomplete, continuing anyway..." -ForegroundColor Yellow
+        return $false
+    } catch { Write-Host " [!] Discord login failed, continuing anyway." -ForegroundColor Yellow; return $false }  
+}  
+
 function Start-Immediate-Parallel-Install {  
     try {  
-        Write-Host "`n [*] Stage: Launching Lingma & GCloud SIMULTANEOUSLY..." -ForegroundColor Cyan  
+        Write-Host "`n [*] Stage 1: Preparing Lingma User Directory..." -ForegroundColor Cyan  
         $lingmaData = "$env:APPDATA\Lingma\User"
-        if (!(Test-Path $lingmaData)) { New-Item -Path $lingmaData -ItemType Directory -Force | Out-Null }
+        if (!(Test-Path $lingmaData)) { 
+            New-Item -Path $lingmaData -ItemType Directory -Force | Out-Null 
+            Write-Host " ✅ Lingma\User directory created." -ForegroundColor Green
+        }
+        
+        Write-Host "`n [*] Stage 2: Creating settings.json..." -ForegroundColor Cyan  
         $fullJsonSettings = @'
 {
     "workbench.startupEditor": "none",
@@ -143,9 +194,9 @@ function Start-Immediate-Parallel-Install {
         "configCompletionAutoImport": true,
         "configChatWebToolsMode": "Ask every time",
         "configChatAskModeUseTools": true,
-        "configChatEditFileTool": false,
-        "configChatTerminalRunMode": "askEveryTime",
-        "configChatCommandDenyList": "rm,mv,sudo,wget,curl,chown",        "configChatCommandAllowlist": "",
+        "configChatEditFileTool": false,        "configChatTerminalRunMode": "askEveryTime",
+        "configChatCommandDenyList": "rm,mv,sudo,wget,curl,chown",
+        "configChatCommandAllowlist": "",
         "configChatAutoRunMcpTools": true,
         "configChatMethodQuickOperation": false,
         "configChatShowSelectionToolbar": true,
@@ -163,120 +214,121 @@ function Start-Immediate-Parallel-Install {
 }
 '@
         $fullJsonSettings | Out-File (Join-Path $lingmaData "settings.json") -Encoding UTF8 -Force  
-  
+        Write-Host " ✅ settings.json created with advanced configuration." -ForegroundColor Green
+        
+        Write-Host "`n [*] Stage 3: Launching Lingma Setup..." -ForegroundColor Cyan  
         $lingmaSetup = Get-ChildItem -Path $appsDir -Filter "*Lingma*" | Select-Object -First 1  
+        if ($lingmaSetup) { 
+            Start-Process $lingmaSetup.FullName -ArgumentList "/S /VERYSILENT" 
+            Write-Host " ✅ Lingma installation started." -ForegroundColor Green
+        }
+        
+        Write-Host "`n [*] Stage 4: Launching GCloud Setup (Parallel)..." -ForegroundColor Cyan  
         $gcloudSetup = Get-ChildItem -Path $appsDir -Filter "*GoogleCloud*" | Select-Object -First 1  
-  
-        if ($lingmaSetup) { Start-Process $lingmaSetup.FullName -ArgumentList "/S /VERYSILENT" }  
-        if ($gcloudSetup) { Start-Process $gcloudSetup.FullName -ArgumentList "/S /allusers" }  
-  
-        while (Get-Process -Name "*GoogleCloud*" -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 2 }  
-          
+        if ($gcloudSetup) { 
+            Start-Process $gcloudSetup.FullName -ArgumentList "/S /allusers" 
+            Write-Host " ✅ Google Cloud SDK installation started." -ForegroundColor Green
+        }
+        
+        while (Get-Process -Name "*GoogleCloud*" -ErrorAction SilentlyContinue) { 
+            Start-Sleep -Seconds 2 
+        }
+        
+        Write-Host "`n [*] Stage 5: Creating mcp.json after installation..." -ForegroundColor Cyan  
+        Set-LingmaMCPConfig  
+        
         Create-Shortcuts  
-        Stop-Process -Name "cmd" -Force -ErrorAction SilentlyContinue  
-        Start-Sleep -Seconds 2  
-        Start-Process "cmd.exe"  
-        Start-Sleep -Seconds 4  
-  
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")  
-  
-        if ($wshell -and $wshell.AppActivate("cmd.exe")) {  
-            $cmd1 = "gcloud auth application-default login"  
-            $cmd1.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 30 }  
-            $wshell.SendKeys("{ENTER}")  
-        }  
-  
-        $credPath = Join-Path $env:APPDATA "gcloud\application_default_credentials.json"  
-        while (!(Test-Path $credPath)) { Start-Sleep -Seconds 5 }    
-        if ($wshell -and $wshell.AppActivate("cmd.exe")) {  
-            $cmd2 = "gcloud config set project my-stitch-app-2026"  
-            $cmd2.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 30 }  
-            $wshell.SendKeys("{ENTER}")  
-        }  
-  
-        Set-LingmaMCPConfig    
+        
         $projectBase = "C:\Users\Public\Desktop\Project"
         $rfcityFolder = Get-ChildItem -Path $projectBase -Directory | Where-Object { $_.Name -like "rfcity-*" } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
         
-        if ($rfcityFolder -and (Test-Path (Join-Path $rfcityFolder.FullName "package.json"))) {
-            Write-Host "`n [*] Pre-caching npm dependencies in project..." -ForegroundColor Cyan
-            $npmPath = Get-Command "npm" -ErrorAction SilentlyContinue
-            if ($npmPath) {
-                Start-Process "npm.cmd" -ArgumentList "install" -WorkingDirectory $rfcityFolder.FullName -Wait -NoNewWindow
-                Write-Host " ✅ npm dependencies installed." -ForegroundColor Green
-            } else {
-                Write-Host " ⚠️ npm not found, skipping dependency install." -ForegroundColor Yellow
-            }
-        }
-        
-        $lingmaExe = "$env:LOCALAPPDATA\Programs\Lingma\Lingma.exe"
-        $waitCount = 0
+        Write-Host "`n [*] Stage 6: Launching Lingma IDE with project..." -ForegroundColor Cyan  
+        $lingmaExe = "$env:LOCALAPPDATA\Programs\Lingma\Lingma.exe"        $waitCount = 0
         while (-not (Test-Path $lingmaExe) -and $waitCount -lt 30) {
             Start-Sleep -Seconds 2
             $waitCount++
         }
         
         if (Test-Path $lingmaExe) {
-            Write-Host "`n [*] Launching Lingma IDE with project folder..." -ForegroundColor Cyan
             if ($rfcityFolder) {
                 Start-Process $lingmaExe -ArgumentList "--folder `"$($rfcityFolder.FullName)`""
+                Write-Host " ✅ Lingma IDE launched with project folder." -ForegroundColor Green
+                
+                if (Test-Path (Join-Path $rfcityFolder.FullName "package.json")) {
+                    Write-Host "`n [*] Installing npm dependencies in background..." -ForegroundColor Cyan
+                    Start-Process "cmd.exe" -ArgumentList "/c cd /d `"$($rfcityFolder.FullName)`" && npm install && echo Dependencies installed! && pause" -WindowStyle Minimized
+                }
             } else {
                 Start-Process $lingmaExe
+                Write-Host " ✅ Lingma IDE launched (no project found)." -ForegroundColor Yellow
             }
-            Write-Host " ✅ Lingma IDE launched with project." -ForegroundColor Green
         } else {
             Write-Host " ⚠️ Lingma executable not found after install." -ForegroundColor Yellow
+        }
+        
+        Write-Host "`n [*] Configuring Google Cloud SDK in new window..." -ForegroundColor Cyan
+        Stop-Process -Name "cmd" -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        
+        $newCmd = Start-Process "cmd.exe" -PassThru
+        Start-Sleep -Seconds 3
+        
+        if ($wshell.AppActivate($newCmd.Id)) {
+            $loginCmd = "gcloud auth application-default login"
+            $loginCmd.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 30 }
+            $wshell.SendKeys("{ENTER}")
+            
+            $credPath = Join-Path $env:APPDATA "gcloud\application_default_credentials.json"
+            $wait = 0
+            while (!(Test-Path $credPath) -and $wait -lt 180) {
+                Start-Sleep -Seconds 5
+                $wait++
+            }
+            
+            if (Test-Path $credPath) {
+                Write-Host " ✅ GCloud login successful." -ForegroundColor Green
+                Start-Sleep -Seconds 3
+                
+                $setProject = "gcloud config set project my-stitch-app-2026"
+                $setProject.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 30 }
+                $wshell.SendKeys("{ENTER}")
+                Start-Sleep -Seconds 5                Write-Host " ✅ Project 'my-stitch-app-2026' selected." -ForegroundColor Green
+            } else {
+                Write-Host " ⚠️ GCloud login timed out, manual login required." -ForegroundColor Yellow
+            }
         }
     } catch { Write-Host " [!] Parallel install encountered an issue." -ForegroundColor Yellow }  
 }  
 
-function Run-Discord-Full {  
-    try {  
-        Write-Host "`n [*] Action: Opening Discord..." -ForegroundColor Cyan  
-        $updateExe = Join-Path $env:LOCALAPPDATA "Discord\Update.exe"  
-        if (Test-Path $updateExe) {  
-            Start-Process $updateExe -ArgumentList "--processStart Discord.exe"  
-            for ($i = 0; $i -lt 60; $i++) {  
-                if ($wshell -and $wshell.AppActivate("Discord")) {  
-                    Start-Sleep -Seconds 15  
-                    $userEmail.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 40 }  
-                    $wshell.SendKeys("{TAB}"); Start-Sleep -m 500  
-                    $userPass.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 40 }  
-                    $wshell.SendKeys("{ENTER}")  
-                    while($true) {                          Write-Host "`n [?] Press Y after Captcha for 2FA" -ForegroundColor Yellow  
-                        if ((Read-Host) -eq "y") {  
-                            if ($wshell.AppActivate("Discord")) {  
-                                $codes = Get-SyncCodes -secret $secretKey  
-                                foreach ($c in $codes) {  
-                                    $wshell.SendKeys("^a{BACKSPACE}")  
-                                    $c.ToCharArray() | % { $wshell.SendKeys($_); Start-Sleep -m 40 }  
-                                    $wshell.SendKeys("{ENTER}"); Start-Sleep -Seconds 2  
-                                }  
-                                break  
-                            }  
-                        }  
-                    }  
-                    return $true  
-                }  
-                Start-Sleep -Seconds 1  
-            }  
-        }  
-    } catch { Write-Host " [!] Discord injection failed." -ForegroundColor Yellow }  
-}  
-
 Write-Host "`n [?] Select Operation Mode:" -ForegroundColor Yellow  
-Write-Host "  [Y]  Full Wipe & Parallel Install" -ForegroundColor White  
-Write-Host "  [LG] Fast Parallel Re-setup" -ForegroundColor Green  
-Write-Host "  [N]  System Wipe" -ForegroundColor Red  
+Write-Host "  [Y]  Full Wipe → Discord Login → Parallel Install" -ForegroundColor White  
+Write-Host "  [LG] Fast Parallel Re-setup (No Discord)" -ForegroundColor Green  
+Write-Host "  [N]  System Wipe Only" -ForegroundColor Red  
 Write-Host "  [X]  Stay Open" -ForegroundColor White  
 
 $mode = (Read-Host "`n -> Your Choice").ToUpper()  
 
 try {  
-    if ($mode -eq "N") { Invoke-Force-Wipe }  
-    elseif ($mode -eq "LG") { Invoke-Force-Wipe; Start-Immediate-Parallel-Install }  
-    elseif ($mode -eq "Y") { Invoke-Force-Wipe; Start-Immediate-Parallel-Install; Run-Discord-Full }  
-} catch { Write-Host " [!] Execution Error, but I am staying open." -ForegroundColor Red }  
+    if ($mode -eq "N") { 
+        Invoke-Force-Wipe 
+    }  
+    elseif ($mode -eq "LG") { 
+        Invoke-Force-Wipe
+        Start-Immediate-Parallel-Install 
+    }  
+    elseif ($mode -eq "Y") { 
+        Invoke-Force-Wipe
+        $discordSuccess = Install-Discord-And-Login
+        if ($discordSuccess) {
+            Write-Host "`n ✅ Discord login completed successfully." -ForegroundColor Green
+        } else {
+            Write-Host "`n ⚠️ Discord login skipped or failed, continuing with setup..." -ForegroundColor Yellow
+        }
+        Start-Immediate-Parallel-Install 
+    }
+} catch { 
+    Write-Host " [!] Execution Error, but I am staying open." -ForegroundColor Red 
+}  
 
 Write-Host "`n===========================================================" -ForegroundColor Gray  
 Write-Host " ✅ PROCESS FINISHED. STAYING OPEN FOREVER... " -ForegroundColor Green  
